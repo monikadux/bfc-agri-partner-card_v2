@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agri-Partner card — Inward &amp; Scheduling</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<!--
+  Agri-Partner summary card — handover mockup
+
+  STYLING
+  Type scale, colours, radii and shadows are taken from the Biomass Bank
+  July 2025 Figma library (nodes 16093-77920 and 6884-4557) via its variables:
+    fontFamily        IBM Plex Sans (only family in the library — no mono)
+    h5                24 / 400 / lh 1.334 / ls 0
+    h6                20 / 500 / lh 1.6   / ls 0.15
+    body1             16 / 400 / lh 1.5   / ls 0.15
+    body2             14 / 400 / lh 1.43  / ls 0.17
+    subtitle2         14 / 500 / lh 1.57  / ls 0.10
+    caption           12 / 400 / lh 1.66  / ls 0.40
+    table/header      14 / 500 / lh 24px  / ls 0.17
+    chip/label        13 / 400 / lh 18px  / ls 0.16
+    button/medium     14 / 500 / lh 24px  / ls 0.40
+    primary/main      #43a047      text/primary    rgba(0,0,0,.87)
+    divider           rgba(0,0,0,.12)   text/secondary rgba(0,0,0,.60)
+    grey/100          #f5f5f5      input border    rgba(0,0,0,.23)
+    green 100/800     #c8e6c9 / #2e7d32    blue 100/800  #bbdefb / #1565c0
+    red 100/800       #fecdd2 / #c62828    blueGrey 50/600 #eceff1 / #546e7a
+    orange 100/800    #ffe0b2 / #ef6c00    borderRadius  12
+  The TABLES follow the scale above. The CARD runs below it on purpose — a
+  hover overlay is a glance, not a page, so it uses a tighter internal scale
+  (16 name / 12 meta / 12.5 deal rows / 10 labels). Keep it that way; raising
+  the card to the page scale makes it sparse and slow to read.
+
+  WHAT IT IS
+  A hover card that appears over any agri-partner name anywhere in the UI.
+  Two screens are shown here (Inward deliveries, Scheduling); the same card
+  is meant for every other list that names a partner.
+
+  CARD CONTENT — deliberately limited
+  1. Identity     name with the partner ID right-aligned beside it, then phone
+                  and GIS village, then tags. Tag colours carry existing
+                  meaning: teal = declared intent, purple = proven (Sold
+                  Biomass, Bought FOM, Rented Tractor).
+  2. Active deals deal id, what it is, and the rate. Nothing else.
+
+  NO PERSONA BUCKET — decided, not an omission
+  Earlier drafts carried a one-word role at the top, derived from the deals.
+  Dropped: a partner onboarded as a farmer who later becomes an aggregator
+  reads wrong either way, and "Farmer" or a blank is more confusing than no
+  word at all. A new persona metric is coming; until it exists the card states
+  no bucket. The 4th element on each deal below is its deal_type kind, kept as
+  the hook for that metric. Note for reference: "Labour" exists nowhere in the
+  backend — no model, field, LookupData value or group — and "Driver" is not a
+  deal type either (it is an FK on EquipmentLedger and Delivery).
+
+  OUT OF SCOPE FOR V1
+  Execution-level counts (trips, check-in / check-out, days worked, deliveries)
+  are a heavy query and are excluded for that reason. Settled or open money is
+  not shown here either. A driver holds no deal of his own — he works under the
+  aggregator's — so his card shows identity plus that one fact.
+
+  INTERACTION
+  open on hover after 250ms  /  close 120ms after leaving
+  card is pointer-events:none so it cannot steal the hover back
+  flips above the name near the viewport bottom, clamps at the right edge
+  opens on keyboard focus, closes on Esc and on scroll
+  click also opens it — that is the touch behaviour
+  width 320px, no internal scroll
+
+  FOR DEV
+  The name should ship as <a href target="_blank">, not <button> as mocked
+  here, so middle-click and cmd-click work. The card's endpoint must read a
+  PRE-AGGREGATED summary per partner — it is called from list rows at scroll
+  speed, so live computation will make it slow.
+
+  Figures below are illustrative placeholders.
+-->
+<style>
+  :root {
+    --green: #43a047;
+    --green-800: #2e7d32;
+    --green-100: #c8e6c9;
+    --blue-800: #1565c0;
+    --blue-100: #bbdefb;
+    --red-800: #c62828;
+    --red-100: #fecdd2;
+    --bgrey-600: #546e7a;
+    --bgrey-50: #eceff1;
+    --text: rgba(0, 0, 0, 0.87);
+    --text2: rgba(0, 0, 0, 0.60);
+    --divider: rgba(0, 0, 0, 0.12);
+    --border: rgba(0, 0, 0, 0.23);
+    --grey-100: #f5f5f5;
+    --radius: 12px;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: var(--text); background: #FFFFFF; }
+
+  /* app bar */
+  .bar { display: flex; align-items: center; gap: 20px; height: 64px; padding: 0 24px; background: var(--green); color: #FFFFFF; }
+  .bar b { font-size: 20px; font-weight: 600; letter-spacing: 0.15px; }
+  .bar .spacer { flex-grow: 1; }
+  .bar span { font-size: 16px; font-weight: 400; letter-spacing: 0.15px; }
+
+  .shell { display: flex; align-items: stretch; min-height: calc(100vh - 64px); }
+
+  /* left nav */
+  .menu { flex: 0 0 224px; background: var(--green); padding: 12px 0 24px; }
+  .menu .item { display: block; width: 100%; padding: 10px 22px; border: 0; background: transparent; font-family: inherit; font-size: 15px; font-weight: 400; letter-spacing: 0.15px; color: rgba(255, 255, 255, 0.92); text-align: left; }
+  .menu button.item { cursor: pointer; }
+  .menu button.item:hover { background: rgba(0, 0, 0, 0.10); color: #FFFFFF; }
+  .menu button.item:focus-visible { outline: 2px solid #FFFFFF; outline-offset: -2px; }
+  .menu .item.on { font-weight: 500; color: #FFFFFF; background: rgba(0, 0, 0, 0.16); }
+  .menu .head { padding: 16px 22px 6px; font-size: 12px; font-weight: 500; letter-spacing: 0.8px; color: rgba(255, 255, 255, 0.72); }
+  .newtag { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: #ffe0b2; color: #ef6c00; font-size: 10px; font-weight: 700; letter-spacing: 0.8px; line-height: 16px; text-transform: uppercase; vertical-align: 1px; }
+
+  .main { flex-grow: 1; min-width: 0; padding: 0 24px 60px; }
+  .screen[hidden] { display: none; }
+
+  /* page title — h5 */
+  h1 { margin: 0; font-size: 24px; font-weight: 400; letter-spacing: 0; line-height: 1.334; }
+  h1 b { font-weight: 600; }
+  h1 .date { font-size: 14px; font-weight: 400; letter-spacing: 0.17px; color: var(--text2); }
+
+  .tabs { display: flex; gap: 28px; padding: 16px 0 0; border-bottom: 1px solid var(--divider); margin-bottom: 20px; }
+  .tabs span { padding-bottom: 12px; font-size: 14px; font-weight: 500; letter-spacing: 0.4px; color: var(--text2); }
+  .tabs span.on { border-bottom: 2px solid var(--green); color: var(--green-800); }
+
+  .title { display: flex; align-items: center; gap: 14px; padding: 22px 0 20px; }
+
+  /* button/medium, pill */
+  .add { margin-left: auto; padding: 8px 22px; border: 0; border-radius: 999px; background: var(--green); font-family: inherit; font-size: 14px; font-weight: 500; letter-spacing: 0.4px; line-height: 24px; color: #FFFFFF; cursor: pointer; box-shadow: 0 3px 1px -2px rgba(0,0,0,0.20), 0 2px 2px 0 rgba(0,0,0,0.14), 0 1px 5px 0 rgba(0,0,0,0.12); }
+
+  .toolbar { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+  .search { flex-grow: 1; max-width: 680px; padding: 9px 18px; border: 1px solid var(--border); border-radius: 999px; background: #FFFFFF; font-family: inherit; font-size: 16px; letter-spacing: 0.15px; color: var(--text); }
+  .search::placeholder { color: var(--text2); }
+  .totals { font-size: 14px; letter-spacing: 0.17px; color: var(--text2); white-space: nowrap; }
+
+  /* filter pills */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .chips span { padding: 6px 16px; border-radius: 999px; font-size: 13px; letter-spacing: 0.16px; line-height: 18px; color: var(--text); background: #ebebeb; }
+  .chips span.on { color: #FFFFFF; background: var(--green); }
+
+  .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 22px; }
+  .filters .box { padding: 11px 16px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; letter-spacing: 0.15px; color: var(--text2); }
+  .filters .tog { font-size: 14px; letter-spacing: 0.17px; color: var(--text); }
+
+  /* table */
+  table { width: 100%; border-collapse: collapse; }
+  th { padding: 14px 16px; background: var(--grey-100); font-size: 14px; font-weight: 500; letter-spacing: 0.17px; line-height: 24px; color: var(--text); text-align: left; }
+  td { padding: 16px; border-bottom: 1px solid var(--divider); font-size: 16px; letter-spacing: 0.15px; line-height: 1.5; color: var(--text); vertical-align: top; }
+  td .sub { margin-top: 4px; font-size: 14px; letter-spacing: 0.17px; line-height: 1.43; color: var(--text2); }
+  td .deal { margin-top: 4px; font-size: 14px; letter-spacing: 0.17px; color: var(--blue-800); }
+
+  /* Flagged scheduling rows: light red fill plus a left accent bar, and a
+     tighter scale than the page — these rows are scanned, not read. */
+  tr.flag td { background: #FDECEA; border-bottom-color: #F3D4D1; padding: 12px; font-size: 12.5px; letter-spacing: 0.1px; line-height: 1.35; }
+  tr.flag td:first-child { border-left: 4px solid var(--red-800); }
+  .psub { margin-top: 4px; font-size: 12.5px; letter-spacing: 0.1px; line-height: 1.35; color: var(--text2); }
+  .pflag { margin-top: 7px; font-size: 12.5px; font-weight: 600; letter-spacing: 0.1px; color: var(--red-800); }
+
+  .mini { display: inline-block; margin: 0 6px 6px 0; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 500; letter-spacing: 0.2px; line-height: 16px; }
+  .mini-g { color: var(--bgrey-600); background: var(--bgrey-50); }
+  .mini-t { color: var(--green-800); background: var(--green-100); }
+  .cellline { margin-top: 5px; font-size: 12.5px; letter-spacing: 0.1px; color: var(--text); }
+  .cellline.muted { color: var(--text2); }
+  .notready { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 11.5px; font-weight: 500; letter-spacing: 0.2px; line-height: 16px; color: var(--bgrey-600); background: var(--bgrey-50); }
+
+  .status { display: inline-block; padding: 5px 14px; border-radius: 999px; font-size: 13px; font-weight: 500; letter-spacing: 0.16px; line-height: 18px; }
+  .booked { color: var(--blue-800); background: var(--blue-100); }
+  .done { color: var(--green-800); background: var(--green-100); }
+
+  /* partner name — hover target */
+  .who { padding: 2px 4px; margin: -2px -4px; border: 0; border-radius: 4px; background: transparent; font-family: inherit; font-size: 16px; letter-spacing: 0.15px; color: var(--text); text-align: left; text-decoration: none; cursor: pointer; }
+  .who .wtext { text-decoration: underline; text-decoration-color: rgba(0, 0, 0, 0.26); text-underline-offset: 3px; }
+  .who:hover, .who:focus-visible { background: rgba(67, 160, 71, 0.10); outline: none; }
+  .who:hover .wtext, .who:focus-visible .wtext { text-decoration-color: var(--green); }
+  tr.flag .who { font-size: 12.5px; letter-spacing: 0.1px; }
+  tr.flag .who.big { font-size: 15px; font-weight: 600; letter-spacing: 0.1px; }
+  tr.flag .who .wtext { text-decoration-color: rgba(176, 32, 32, 0.35); }
+  tr.flag .who:hover, tr.flag .who:focus-visible { background: #FBDCD8; }
+  tr.flag .who:hover .wtext, tr.flag .who:focus-visible .wtext { text-decoration-color: var(--red-800); }
+  tr.flag .who:hover .extico, tr.flag .who:focus-visible .extico { color: var(--red-800); }
+
+  .extico { width: 12px; height: 12px; margin-left: 6px; vertical-align: -1px; color: var(--text2); }
+  .who:hover .extico, .who:focus-visible .extico { color: var(--green-800); }
+
+  .hint { margin-top: 24px; font-size: 12px; letter-spacing: 0.4px; line-height: 1.66; color: var(--text2); }
+
+  /* ---------- the card ---------- */
+  #card { position: fixed; z-index: 90; width: 320px; background: #FFFFFF; border: 1px solid rgba(0, 0, 0, 0.10); border-radius: 8px; box-shadow: 0 5px 5px -3px rgba(0,0,0,0.20), 0 8px 10px 1px rgba(0,0,0,0.14), 0 3px 14px 2px rgba(0,0,0,0.12); overflow: hidden; pointer-events: none; opacity: 0; transform: translateY(-4px); transition: opacity .12s ease, transform .12s ease; }
+  #card.show { opacity: 1; transform: translateY(0); }
+
+  .head { padding: 13px 14px 12px; }
+  .c-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .pid { font-size: 11px; letter-spacing: 0.4px; color: rgba(0, 0, 0, 0.55); white-space: nowrap; }
+  .pname { font-size: 16px; font-weight: 600; letter-spacing: 0.15px; line-height: 1.25; color: var(--text); }
+  .meta { margin-top: 5px; font-size: 12px; letter-spacing: 0.3px; line-height: 1.4; color: var(--text2); }
+  .tags { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 5px; }
+  .tag { padding: 3px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 500; letter-spacing: 0.2px; line-height: 16px; }
+  .tag-t { background: #DFF1EC; color: #14655A; }
+  .tag-p { background: #EAE3F6; color: #4A2C8F; }
+
+  .deals { padding: 11px 14px 12px; border-top: 1px solid var(--divider); }
+  .deals-h { font-size: 10px; font-weight: 700; letter-spacing: 0.9px; text-transform: uppercase; color: rgba(0, 0, 0, 0.55); }
+  .deal-row { display: flex; align-items: baseline; gap: 9px; margin-top: 8px; }
+  /* Deal ids are not links inside the card — bracketed and light grey so they
+     read as a reference, not a control. Blue stays reserved for the deal links
+     in the table. */
+  .deal-id { margin-left: 5px; font-size: 11.5px; letter-spacing: 0.1px; color: rgba(0, 0, 0, 0.42); }
+  .deal-what { flex-grow: 1; font-size: 12.5px; letter-spacing: 0.1px; color: var(--text); }
+  .deal-price { font-size: 12.5px; font-weight: 400; letter-spacing: 0.1px; color: var(--text); white-space: nowrap; }
+  .deal-none { margin-top: 8px; font-size: 12.5px; color: var(--text2); }
+  .deal-note { margin-top: 8px; font-size: 11.5px; line-height: 1.45; color: var(--text2); }
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <b>BiofuelCircle</b>
+  <span class="spacer"></span>
+  <span>Chacherva Biomass Bank, Barabanki</span>
+  <span class="spacer"></span>
+  <span>HELP</span>
+</div>
+
+<div class="shell">
+  <nav class="menu" aria-label="Main">
+    <span class="item">Home</span>
+    <span class="item">Transport</span>
+    <span class="item">Equipment Rental</span>
+
+    <div class="head">PRODUCT DEALS</div>
+    <span class="item">Walk-in / Pick-up</span>
+    <span class="item">Inward / Outward</span>
+    <span class="item">Processing</span>
+
+    <div class="head">OPERATIONS</div>
+    <span class="item">Aggregation Plan</span>
+    <button class="item" type="button" data-go="scheduling">Scheduling<span class="newtag">New</span></button>
+    <span class="item">Ledger</span>
+    <span class="item">Attendance</span>
+    <span class="item">Fuel</span>
+
+    <div class="head">DELIVERIES</div>
+    <span class="item">Delivery Planning</span>
+    <button class="item" type="button" data-go="inward">Inward<span class="newtag">New</span></button>
+    <span class="item">Outward</span>
+
+    <div class="head">SETTLEMENT</div>
+    <span class="item">Cashflow</span>
+    <span class="item">Invoices</span>
+    <span class="item">Settlement View</span>
+  </nav>
+
+  <main class="main">
+
+    <section class="screen" id="screen-inward">
+      <div class="title">
+        <h1>Deliveries <b>All Data</b></h1>
+      </div>
+
+      <div class="toolbar">
+        <input class="search" type="text" placeholder="Delivery Id, WB Reciept Id, Seller Name" aria-label="Search deliveries">
+        <span class="totals">Total Bales: 29850 &nbsp;|&nbsp; Total Deliveries: 1396 &nbsp;|&nbsp; Total Quantity: 5,400.85 MT</span>
+      </div>
+
+      <div class="chips">
+        <span class="on">All Valid</span>
+        <span>Booked (799)</span>
+        <span>Completed (597)</span>
+        <span>Void (14)</span>
+        <span>Draft (0)</span>
+        <span>Processing (0)</span>
+        <span>In Progress (0)</span>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Delivery ID / WB Receipt</th>
+            <th>Seller</th>
+            <th>Aggregation Deal</th>
+            <th>Bales / Product</th>
+            <th>Quantity (Net Weight) / Delivered Date</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>28432<div class="sub">1137</div></td>
+            <td><button class="who" type="button" data-p="dilep">Dilep kumar</button><div class="sub">9696608339</div></td>
+            <td><button class="who" type="button" data-p="kuldeep">Kuldeep verma</button><div class="deal">61</div></td>
+            <td>42 Bales<div class="sub">Rice Straw</div></td>
+            <td>9120.00 KG<div class="sub">12:00 PM, 13 Nov 2025</div></td>
+            <td><span class="status booked">BOOKED</span></td>
+          </tr>
+          <tr>
+            <td>27659<div class="sub">1130</div></td>
+            <td><button class="who" type="button" data-p="manish">Manish Kumar</button><div class="sub">9026136941</div></td>
+            <td><button class="who" type="button" data-p="kuldeep">Kuldeep verma</button><div class="deal">61</div></td>
+            <td>44 Bales<div class="sub">Rice Straw</div></td>
+            <td>9540.00 KG<div class="sub">12:00 PM, 13 Nov 2025</div></td>
+            <td><span class="status done">COMPLETED</span></td>
+          </tr>
+          <tr>
+            <td>27663<div class="sub">1131</div></td>
+            <td><button class="who" type="button" data-p="manish">Manish Kumar</button><div class="sub">9026136941</div></td>
+            <td><button class="who" type="button" data-p="kuldeep">Kuldeep verma</button><div class="deal">61</div></td>
+            <td>42 Bales<div class="sub">Rice Straw</div></td>
+            <td>8990.00 KG<div class="sub">12:00 PM, 13 Nov 2025</div></td>
+            <td><span class="status done">COMPLETED</span></td>
+          </tr>
+          <tr>
+            <td>28426<div class="sub">1136</div></td>
+            <td><button class="who" type="button" data-p="brij">Brij Narayan</button><div class="sub">8858762922</div></td>
+            <td><button class="who" type="button" data-p="kuldeep">Kuldeep verma</button><div class="deal">61</div></td>
+            <td>42 Bales<div class="sub">Rice Straw</div></td>
+            <td>8720.00 KG<div class="sub">12:00 PM, 13 Nov 2025</div></td>
+            <td><span class="status done">COMPLETED</span></td>
+          </tr>
+          <tr>
+            <td>28451<div class="sub">1141</div></td>
+            <td><button class="who" type="button" data-p="layk">Layk ram</button><div class="sub">9984915828</div></td>
+            <td><button class="who" type="button" data-p="kuldeep">Kuldeep verma</button><div class="deal">61</div></td>
+            <td>44 Bales<div class="sub">Rice Straw</div></td>
+            <td>8980.00 KG<div class="sub">12:00 PM, 13 Nov 2025</div></td>
+            <td><span class="status booked">BOOKED</span></td>
+          </tr>
+          <tr>
+            <td>28446<div class="sub">1139</div></td>
+            <td><button class="who" type="button" data-p="suresh">Suresh Chand</button><div class="sub">8299549768</div></td>
+            <td><button class="who" type="button" data-p="kuldeep">Kuldeep verma</button><div class="deal">61</div></td>
+            <td>42 Bales<div class="sub">Rice Straw</div></td>
+            <td>9050.00 KG<div class="sub">12:00 PM, 13 Nov 2025</div></td>
+            <td><span class="status booked">BOOKED</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="hint">Hover any partner name. Suresh Chand shows the no-deals state.</p>
+    </section>
+
+    <section class="screen" id="screen-scheduling" hidden>
+      <div class="tabs">
+        <span>Summary</span>
+        <span>Booking Calendar</span>
+        <span class="on">Scheduling</span>
+        <span>Map view</span>
+      </div>
+
+      <div class="title">
+        <h1>Scheduling <b>Today</b> <span class="date">(22 Sept 2026)</span></h1>
+        <button class="add" type="button">+ Add Schedule</button>
+      </div>
+
+      <div class="toolbar">
+        <input class="search" type="text" placeholder="Search by farmer, aggregator, driver or village..." aria-label="Search schedules">
+        <span class="totals">Total Agri-partners: 6 &nbsp;|&nbsp; Total Farms: 6</span>
+      </div>
+
+      <div class="filters">
+        <span class="box">Select Activity</span>
+        <span class="box">All</span>
+        <span class="tog">Show flagged only</span>
+        <span class="tog">Acreage missing only</span>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Agri-Partner</th>
+            <th>Slashing</th>
+            <th>Raking</th>
+            <th>Baling</th>
+            <th>Pickup</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="flag">
+            <td>
+              <button class="who big" type="button" data-p="surendra">Surendra</button>
+              <div class="psub">8853521077</div>
+              <div class="psub">Hasanpur Tanda</div>
+              <div class="pflag">No bank a/c</div>
+            </td>
+            <td>
+              <span class="mini mini-g">Manual</span><span class="mini mini-t">Allocated</span>
+              <div class="cellline">22 Sept 2026</div>
+              <div class="cellline"><button class="who" type="button" data-p="sakshi">Sakshi Verma (8303404834)</button></div>
+              <div class="cellline"><button class="who" type="button" data-p="kasim">Kasim (7390026878)</button></div>
+              <div class="cellline">Slasher ID : 6552</div>
+              <div class="cellline muted">(2.5 acres)</div>
+            </td>
+            <td><span class="notready">Not Ready</span></td>
+            <td><span class="notready">Not Ready</span></td>
+            <td><span class="notready">Not Ready</span></td>
+          </tr>
+          <tr class="flag">
+            <td>
+              <button class="who big" type="button" data-p="amar">Amar Singh</button>
+              <div class="psub">9554234388</div>
+              <div class="psub">Hasanpur Tanda</div>
+              <div class="pflag">No bank a/c</div>
+            </td>
+            <td>
+              <span class="mini mini-g">Manual</span><span class="mini mini-t">Allocated</span>
+              <div class="cellline">22 Sept 2026</div>
+              <div class="cellline"><button class="who" type="button" data-p="sakshi">Sakshi Verma (8303404834)</button></div>
+              <div class="cellline"><button class="who" type="button" data-p="kasim">Kasim (7390026878)</button></div>
+              <div class="cellline">Slasher ID : 6552</div>
+              <div class="cellline muted">(4 acres)</div>
+            </td>
+            <td><span class="notready">Not Ready</span></td>
+            <td><span class="notready">Not Ready</span></td>
+            <td><span class="notready">Not Ready</span></td>
+          </tr>
+          <tr class="flag">
+            <td>
+              <button class="who big" type="button" data-p="manoj">Manoj</button>
+              <div class="psub">6387845306</div>
+              <div class="psub">Ajgana</div>
+              <div class="pflag">No bank a/c</div>
+            </td>
+            <td>
+              <span class="mini mini-g">Manual</span><span class="mini mini-t">Allocated</span>
+              <div class="cellline">22 Sept 2026</div>
+              <div class="cellline"><button class="who" type="button" data-p="sakshi">Sakshi Verma (8303404834)</button></div>
+              <div class="cellline"><button class="who" type="button" data-p="kasim">Kasim (7390026878)</button></div>
+              <div class="cellline">Slasher ID : 6552</div>
+              <div class="cellline muted">(4 acres)</div>
+            </td>
+            <td><span class="notready">Not Ready</span></td>
+            <td><span class="notready">Not Ready</span></td>
+            <td><span class="notready">Not Ready</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p class="hint">Three partners in every row — farmer, labour, driver. Kasim shows the driver state: no deal of his own.</p>
+    </section>
+
+  </main>
+</div>
+
+<div id="card" role="tooltip" aria-hidden="true"></div>
+
+<script>
+(function () {
+
+  /* Deal kinds drive the role chip. A shared crop deal, reused by the farmers. */
+  var CROP = ['#1895', 'Kharif · Rice Straw', '₹1,450/MT', 'crop'];
+
+  var PARTNERS = {
+    kuldeep: {
+      name: 'Kuldeep verma', id: 'ID 75906',
+      meta: '9451401775 · Nawabganj (Jahangeerabad)',
+      tags: [['Aggregator', 0], ['Rented Tractor', 1], ['Bought FOM', 1]],
+      deals: [
+        ['#61', 'Aggregation · Rice Straw', '₹1,450/MT', 'aggregation'],
+        ['#74', 'Tractor rental', '₹620/hr', 'rental'],
+        ['#88', 'Baling', '₹310/bale', 'baling']
+      ]
+    },
+    dilep: {
+      name: 'Dilep kumar', id: 'ID 10839',
+      meta: '9696608339 · Nawabganj (Mubarak Pur)',
+      tags: [['Farm Clearing', 0], ['Sold Biomass', 1], ['Bought FOM', 1]],
+      deals: [CROP]
+    },
+    manish: {
+      name: 'Manish Kumar', id: 'ID 118322',
+      meta: '9026136941 · Nawabganj (Piarey Pur)',
+      tags: [['Farm Clearing', 0], ['Sold Biomass', 1]],
+      deals: [CROP]
+    },
+    brij: {
+      name: 'Brij Narayan', id: 'ID 126540',
+      meta: '8858762922 · Nawabganj (Media)',
+      tags: [['Farm Clearing', 0], ['Sold Biomass', 1]],
+      deals: [CROP]
+    },
+    layk: {
+      name: 'Layk ram', id: 'ID 131907',
+      meta: '9984915828 · Nawabganj (Jyori)',
+      tags: [['Farm Clearing', 0], ['Sold Biomass', 1], ['Bought FOM', 1]],
+      deals: [CROP]
+    },
+    suresh: {
+      name: 'Suresh Chand', id: 'ID 152880',
+      meta: '8299549768 · Nawabganj (Shahab Pur)',
+      tags: [['Farm Clearing', 0]],
+      deals: []
+    },
+    surendra: {
+      name: 'Surendra', id: 'ID 291455',
+      meta: '8853521077 · Hasanpur Tanda · 2.5 acres',
+      tags: [['Farm Clearing', 0]],
+      deals: []
+    },
+    amar: {
+      name: 'Amar Singh', id: 'ID 288140',
+      meta: '9554234388 · Hasanpur Tanda · 4 acres',
+      tags: [['Farm Clearing', 0], ['Sold Biomass', 1]],
+      deals: [CROP]
+    },
+    manoj: {
+      name: 'Manoj', id: 'ID 288702',
+      meta: '6387845306 · Ajgana · 4 acres',
+      tags: [['Farm Clearing', 0], ['Bought FOM', 1]],
+      deals: [CROP]
+    },
+    sakshi: {
+      name: 'Sakshi Verma', id: 'ID 138744',
+      meta: '8303404834 · Ajgana',
+      tags: [['Labour', 0], ['Farm Clearing', 0]],
+      deals: [['#212', 'Slashing · labour', '₹480/acre', 'labour']]
+    },
+    kasim: {
+      name: 'Kasim', id: 'ID 145021',
+      meta: '7390026878 · Hasanpur Tanda',
+      tags: [['Driver', 0], ['Labour', 0]],
+      deals: [],
+      note: 'Works under Kuldeep verma’s deals.'
+    }
+  };
+
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function render(p) {
+    var tags = p.tags.map(function (t) {
+      return '<span class="tag ' + (t[1] ? 'tag-p' : 'tag-t') + '">' + esc(t[0]) + '</span>';
+    }).join('');
+
+    var body;
+    if (p.deals.length) {
+      body = '<div class="deals-h">Active deals</div>' + p.deals.map(function (d) {
+        return '<div class="deal-row">'
+          + '<span class="deal-what">' + esc(d[1])
+          + '<span class="deal-id">(' + esc(d[0]) + ')</span></span>'
+          + '<span class="deal-price">' + esc(d[2]) + '</span></div>';
+      }).join('');
+    } else {
+      body = '<div class="deals-h">Active deals</div><div class="deal-none">None.</div>';
+    }
+    if (p.note) {
+      body += '<div class="deal-note">' + esc(p.note) + '</div>';
+    }
+
+    return '<div class="head"><div class="c-top">'
+      + '<span class="pname">' + esc(p.name) + '</span>'
+      + '<span class="pid">' + esc(p.id) + '</span></div>'
+      + '<div class="meta">' + esc(p.meta) + '</div>'
+      + '<div class="tags">' + tags + '</div></div>'
+      + '<div class="deals">' + body + '</div>';
+  }
+
+  var EXT_ICON = '<svg class="extico" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+    + ' stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<path d="M15 3h6v6"></path><path d="M10 14 21 3"></path>'
+    + '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>';
+
+  var card = document.getElementById('card');
+  var openTimer = null;
+  var closeTimer = null;
+
+  function place(el) {
+    var r = el.getBoundingClientRect();
+    var h = card.offsetHeight;
+    var w = card.offsetWidth;
+    var top = r.bottom + 6;
+    if (top + h > window.innerHeight - 8) {
+      top = Math.max(8, r.top - h - 6);
+    }
+    var left = r.left;
+    if (left + w > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - w - 8);
+    }
+    card.style.top = top + 'px';
+    card.style.left = left + 'px';
+  }
+
+  function show(el) {
+    var p = PARTNERS[el.getAttribute('data-p')];
+    if (!p) { return; }
+    card.innerHTML = render(p);
+    card.setAttribute('aria-hidden', 'false');
+    place(el);
+    card.classList.add('show');
+  }
+
+  function hide() {
+    card.classList.remove('show');
+    card.setAttribute('aria-hidden', 'true');
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.who'), function (el) {
+    el.innerHTML = '<span class="wtext">' + esc(el.textContent.trim()) + '</span>' + EXT_ICON;
+    el.setAttribute('title', 'Opens the partner record in a new tab');
+
+    el.addEventListener('mouseenter', function () {
+      clearTimeout(closeTimer);
+      openTimer = setTimeout(function () { show(el); }, 250);
+    });
+    el.addEventListener('mouseleave', function () {
+      clearTimeout(openTimer);
+      closeTimer = setTimeout(hide, 120);
+    });
+    el.addEventListener('focus', function () { show(el); });
+    el.addEventListener('blur', hide);
+    el.addEventListener('click', function (e) {
+      e.preventDefault();
+      clearTimeout(openTimer);
+      show(el);
+    });
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { hide(); }
+  });
+  window.addEventListener('scroll', hide, true);
+
+  /* ---------- screens ---------- */
+
+  var SCREENS = {
+    inward: document.getElementById('screen-inward'),
+    scheduling: document.getElementById('screen-scheduling')
+  };
+  var navButtons = document.querySelectorAll('.menu [data-go]');
+
+  function go(name, push) {
+    if (!SCREENS[name]) { name = 'inward'; }
+    hide();
+    Object.keys(SCREENS).forEach(function (k) {
+      SCREENS[k].hidden = (k !== name);
+    });
+    Array.prototype.forEach.call(navButtons, function (b) {
+      var on = b.getAttribute('data-go') === name;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-current', on ? 'page' : 'false');
+    });
+    document.title = (name === 'scheduling' ? 'Scheduling' : 'Inward deliveries')
+      + ' — Agri-Partner card';
+    if (push && window.location.hash !== '#' + name) {
+      window.location.hash = name;
+    }
+    window.scrollTo(0, 0);
+  }
+
+  Array.prototype.forEach.call(navButtons, function (b) {
+    b.addEventListener('click', function () { go(b.getAttribute('data-go'), true); });
+  });
+
+  window.addEventListener('hashchange', function () {
+    go(window.location.hash.replace('#', ''), false);
+  });
+
+  go(window.location.hash.replace('#', '') || 'inward', false);
+}());
+</script>
+</body>
+</html>
